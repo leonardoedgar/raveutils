@@ -6,7 +6,16 @@ import openravepy as orpy
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 # Local modules
 import raveutils as ru
+import pkg_resources
 
+if pkg_resources.parse_version(orpy.__version__) > pkg_resources.parse_version("0.9.0"):
+  PLANNER_STATUS = orpy.PlannerStatusCode
+  def is_has_solution(status):
+      return status.statusCode == PLANNER_STATUS.HasSolution
+else:
+  PLANNER_STATUS = orpy.PlannerStatus
+  def is_has_solution(status):
+      return status == PLANNER_STATUS.HasSolution
 
 def plan_cartesian_twist(robot, twist, num_waypoints=10):
   """
@@ -44,7 +53,7 @@ def plan_cartesian_twist(robot, twist, num_waypoints=10):
         return None
   traj = trajectory_from_waypoints(robot, waypoints)
   status = retime_trajectory(robot, traj, 'ParabolicTrajectoryRetimer')
-  if status != orpy.PlannerStatus.HasSolution:
+  if is_has_solution(status):
     # Time parameterization failed. Could not find a valid path solution.
     return None
   return traj
@@ -166,7 +175,7 @@ def plan_to_joint_configuration(robot, qgoal, pname='BiRRT', max_iters=20,
       if initsuccess:
         traj = orpy.RaveCreateTrajectory(env, '')
         status = planner.PlanPath(traj)             # Plan the trajectory
-        if status == orpy.PlannerStatus.HasSolution:
+        if is_has_solution(status):
           duration = traj.GetDuration()
           if duration < min_duration:
             min_duration = duration
@@ -209,7 +218,7 @@ def retime_trajectory(robot, traj, method):
   params.SetPostProcessing('', '')
   # Generate the trajectory
   planner = orpy.RaveCreatePlanner(env, method)
-  status = orpy.PlannerStatus.Failed
+  status = PLANNER_STATUS.Failed
   success = planner.InitPlan(robot, params)
   if success:
     status = planner.PlanPath(traj)
